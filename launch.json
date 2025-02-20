@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: SparseMatrix",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/SparseMatrix.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}

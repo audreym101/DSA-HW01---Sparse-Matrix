@@ -1,99 +1,94 @@
-class Pair:
-    def __init__(self, row, col):
-        self.row = row
-        self.col = col
-
-    def __hash__(self):
-        return hash((self.row, self.col))
-
-    def __eq__(self, other):
-        return self.row == other.row and self.col == other.col
+import sys
+import os
 
 class SparseMatrix:
-    def __init__(self, numRows=None, numCols=None, matrixFilePath=None):
-        self.numRows = numRows
-        self.numCols = numCols
-        self.elements = {}
+    def __init__(self, filename=None):
+        self.rows = 0
+        self.cols = 0
+        self.elements = {}  # Dictionary to store non-zero elements
         
-        if matrixFilePath is not None:
-            self.loadFromFile(matrixFilePath)
-
-    def loadFromFile(self, filePath):
-        with open(filePath, 'r') as reader:
-            self.numRows = int(reader.readline().split("=")[1])
-            self.numCols = int(reader.readline().split("=")[1])
+        if filename:
+            self.load(filename)
+    
+    def load(self, filename):
+        with open(filename, 'r') as file:
+            # Read dimensions from first line
+            self.rows, self.cols = map(int, file.readline().split())
             
-            for line in reader:
-                line = line.strip()
-                if line:
-                    if line[0] != '(' or line[-1] != ')':
-                        raise ValueError("Input file has wrong format")
-                    
-                    parts = line[1:-1].split(",")
-                    if len(parts) != 3:
-                        raise ValueError("Input file has wrong format")
-                    
-                    row = int(parts[0].strip())
-                    col = int(parts[1].strip())
-                    value = int(parts[2].strip())
-                    
-                    self.setElement(row, col, value)
-
-    def getElement(self, row, col):
-        return self.elements.get(Pair(row, col), 0)
-
-    def setElement(self, row, col, value):
-        key = Pair(row, col)
-        if value != 0:
-            self.elements[key] = value
-        elif key in self.elements:
-            del self.elements[key]
-
-    def add(self, other):
-        if self.numRows != other.numRows or self.numCols != other.numCols:
-            raise ValueError("Matrix dimensions must be the same for addition")
-
-        result = SparseMatrix(self.numRows, self.numCols)
-        for key, value in self.elements.items():
-            result.setElement(key.row, key.col, value + other.getElement(key.row, key.col))
-
-        for key, value in other.elements.items():
-            if key not in self.elements:
-                result.setElement(key.row, key.col, value)
-
+            # Read matrix elements
+            for line in file:
+                row, col, value = map(float, line.split())
+                self.elements[(int(row), int(col))] = value
+    
+    def save(self, filename):
+        with open(filename, 'w') as file:
+            file.write(f"{self.rows} {self.cols}\n")
+            for (row, col), value in self.elements.items():
+                file.write(f"{row} {col} {value}\n")
+    
+    def __str__(self):
+        result = f"Matrix {self.rows}x{self.cols}:\n"
+        for (row, col), value in sorted(self.elements.items()):
+            result += f"({row}, {col}): {value}\n"
+        return result
+    
+    def __add__(self, other):
+        if (self.rows, self.cols) != (other.rows, other.cols):
+            raise ValueError("Matrices must have same dimensions for addition")
+        
+        result = SparseMatrix()
+        result.rows, result.cols = self.rows, self.cols
+        
+        # Add elements from both matrices
+        for pos, value in self.elements.items():
+            result.elements[pos] = value
+        for pos, value in other.elements.items():
+            if pos in result.elements:
+                result.elements[pos] += value
+            else:
+                result.elements[pos] = value
+        return result
+    
+    def __mul__(self, other):
+        if self.cols != other.rows:
+            raise ValueError("Number of columns in first matrix must match rows in second matrix")
+        
+        result = SparseMatrix()
+        result.rows, result.cols = self.rows, other.cols
+        
+        # Perform matrix multiplication
+        for (i, k), value1 in self.elements.items():
+            for (k2, j), value2 in other.elements.items():
+                if k == k2:
+                    pos = (i, j)
+                    result.elements[pos] = result.elements.get(pos, 0) + value1 * value2
+        
         return result
 
-    def subtract(self, other):
-        if self.numRows != other.numRows or self.numCols != other.numCols:
-            raise ValueError("Matrix dimensions must be the same for subtraction")
+def main():
+    if len(sys.argv) != 4:
+        print("Error: Incorrect number of arguments")
+        print("Usage: python SparseMatrix.py <matrix1_file_path> <matrix2_file_path> <result_directory>")
+        print("Example: python SparseMatrix.py matrix1.txt matrix2.txt results")
+        sys.exit(1)
 
-        result = SparseMatrix(self.numRows, self.numCols)
-        for key, value in self.elements.items():
-            result.setElement(key.row, key.col, value - other.getElement(key.row, key.col))
+    matrix1_path = sys.argv[1]
+    matrix2_path = sys.argv[2]
+    result_dir = sys.argv[3]
 
-        for key, value in other.elements.items():
-            if key not in self.elements:
-                result.setElement(key.row, key.col, -value)
+    # Create result directory if it doesn't exist
+    os.makedirs(result_dir, exist_ok=True)
 
-        return result
+    # Read matrices
+    matrix1 = SparseMatrix(matrix1_path)
+    matrix2 = SparseMatrix(matrix2_path)
 
-    def multiply(self, other):
-        if self.numCols != other.numRows:
-            raise ValueError("Matrix dimensions are not suitable for multiplication")
+    # Add matrices
+    result = matrix1 + matrix2
 
-        result = SparseMatrix(self.numRows, other.numCols)
-        for key, value1 in self.elements.items():
-            row1, col1 = key.row, key.col
-            for col2 in range(other.numCols):
-                value2 = other.getElement(col1, col2)
-                if value2 != 0:
-                    result.setElement(row1, col2, result.getElement(row1, col2) + value1 * value2)
+    # Save result
+    result_path = os.path.join(result_dir, "result.txt")
+    result.save(result_path)
 
-        return result
-
-    def toFile(self, filePath):
-        with open(filePath, 'w') as writer:
-            writer.write(f"rows={self.numRows}\n")
-            writer.write(f"cols={self.numCols}\n")
-            for key, value in self.elements.items():
-                writer.write(f"({key.row}, {key.col}, {value})\n")
+if __name__ == "__main__":
+    main()
